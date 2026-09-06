@@ -33,7 +33,16 @@ export default function BlogEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
-  const selectedImageRef = useRef<HTMLImageElement | null>(null);
+  const imageAreaRef = useRef<HTMLDivElement>(null);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [imageAlt, setImageAlt] = useState("");
+  const [decorative, setDecorative] = useState(false);
+  const [imageBounds, setImageBounds] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "uploading" | "success" | "error"
   >("idle");
@@ -42,9 +51,48 @@ export default function BlogEditor({
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
       editorRef.current.innerHTML = value;
-      selectedImageRef.current = null;
+      savedRangeRef.current = null;
     }
   }, [value]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const updateBounds = () => {
+      const area = imageAreaRef.current;
+      if (!area || !editorRef.current?.contains(selectedImage)) {
+        setSelectedImage(null);
+        setImageBounds(null);
+        return;
+      }
+      const imageRect = selectedImage.getBoundingClientRect();
+      const areaRect = area.getBoundingClientRect();
+      setImageBounds({
+        top: imageRect.top - areaRect.top,
+        left: imageRect.left - areaRect.left,
+        width: imageRect.width,
+        height: imageRect.height,
+      });
+    };
+    const frame = requestAnimationFrame(updateBounds);
+    const observer = new ResizeObserver(updateBounds);
+    observer.observe(selectedImage);
+    if (editorRef.current) observer.observe(editorRef.current);
+    window.addEventListener("resize", updateBounds);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", updateBounds);
+    };
+  }, [selectedImage, value]);
+
+  const selectImage = (image: HTMLImageElement, newlyInserted = false) => {
+    if (image === selectedImage) return;
+    setSelectedImage(image);
+    setImageBounds(null);
+    const alt = image.getAttribute("alt") ?? "";
+    setImageAlt(alt);
+    setDecorative(!newlyInserted && alt === "");
+  };
 
   const saveSelection = () => {
     const selection = window.getSelection();
@@ -58,9 +106,6 @@ export default function BlogEditor({
 
     if (editor.contains(range.commonAncestorContainer)) {
       savedRangeRef.current = range.cloneRange();
-      const node = range.startContainer.childNodes[range.startOffset];
-      selectedImageRef.current =
-        !range.collapsed && node instanceof HTMLImageElement ? node : null;
     }
   };
 
@@ -68,7 +113,11 @@ export default function BlogEditor({
     const selection = window.getSelection();
     const range = savedRangeRef.current;
 
-    if (!selection || !range) {
+    if (
+      !selection ||
+      !range ||
+      !editorRef.current?.contains(range.commonAncestorContainer)
+    ) {
       return false;
     }
 
@@ -116,36 +165,48 @@ export default function BlogEditor({
     }
   };
 
-  const insertImage = (src: string, alt: string) => {
+  const insertImage = (src: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const previousImages = new Set(editor.querySelectorAll("img"));
     const image = document.createElement("img");
     image.setAttribute("src", src);
-    image.setAttribute("alt", alt);
+    image.setAttribute("alt", "");
     insertHtml(image.outerHTML);
+    const insertedImage = Array.from(editor.querySelectorAll("img")).find(
+      (candidate) => !previousImages.has(candidate),
+    );
+    if (insertedImage) {
+      selectImage(insertedImage, true);
+      insertedImage.scrollIntoView({ block: "center" });
+    }
   };
 
-  const editImageAlt = () => {
-    const image = selectedImageRef.current;
-    if (!image || !editorRef.current?.contains(image)) {
-      window.alert("Select an image in the editor first, then choose Image alt text.");
-      return;
+  const updateImageAlt = (alt: string) => {
+    if (!selectedImage || !editorRef.current?.contains(selectedImage)) return;
+    selectedImage.setAttribute("alt", alt);
+    syncEditorValue();
+  };
+
+  const finishImageEdit = () => {
+    updateImageAlt(decorative ? "" : imageAlt);
+    editorRef.current?.focus();
+    if (selectedImage && editorRef.current?.contains(selectedImage)) {
+      const range = document.createRange();
+      range.setStartAfter(selectedImage);
+      range.collapse(true);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      saveSelection();
     }
-    const alt = window.prompt(
-      "Image alt text (leave empty for a decorative image)",
-      image.getAttribute("alt") ?? "",
-    );
-    if (alt !== null) {
-      image.setAttribute("alt", alt);
-      syncEditorValue();
-    }
+    setSelectedImage(null);
+    setImageBounds(null);
   };
 
   const addImage = () => {
     const src = window.prompt("Unesite URL slike");
-
-    if (src) {
-      const alt = window.prompt("Image alt text (leave empty for a decorative image)", "");
-      if (alt !== null) insertImage(src, alt);
-    }
+    if (src) insertImage(src);
   };
 
   const addYoutube = () => {
@@ -178,12 +239,6 @@ export default function BlogEditor({
       return;
     }
 
-    const alt = window.prompt("Image alt text (leave empty for a decorative image)", "");
-    if (alt === null) {
-      event.target.value = "";
-      return;
-    }
-
     setUploadStatus("uploading");
     setUploadMessage("");
 
@@ -192,7 +247,7 @@ export default function BlogEditor({
         setUploadMessage(`Uploadujem sliku... ${Math.round(percentage)}%`),
       );
 
-      insertImage(uploadedImage.url, alt);
+      insertImage(uploadedImage.url);
       setUploadStatus("success");
       setUploadMessage("Slika je ubačena u tekst.");
     } catch (error) {
@@ -238,15 +293,6 @@ export default function BlogEditor({
         </button>
         <button
           type="button"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={editImageAlt}
-          title="Select an image in the editor to edit its alt text"
-          className="h-9 rounded-md border border-[#5c4a3d]/15 px-3 text-sm font-semibold text-[#5c4a3d] transition-colors hover:bg-[#5c4a3d]/8"
-        >
-          Image alt text
-        </button>
-        <button
-          type="button"
           onMouseDown={saveSelection}
           onClick={addYoutube}
           className="h-9 rounded-md border border-[#5c4a3d]/15 px-3 text-sm font-semibold text-[#5c4a3d] transition-colors hover:bg-[#5c4a3d]/8"
@@ -281,30 +327,98 @@ export default function BlogEditor({
         </p>
       ) : null}
       <div
-        ref={editorRef}
-        contentEditable
-        role="textbox"
-        aria-label={ariaLabel}
-        onClick={(event) => {
-          if (event.target instanceof HTMLImageElement) {
-            const range = document.createRange();
-            range.selectNode(event.target);
-            const selection = window.getSelection();
-            selection?.removeAllRanges();
-            selection?.addRange(range);
+        ref={imageAreaRef}
+        className="relative"
+        style={{ paddingBottom: selectedImage ? 190 : undefined }}
+      >
+        <div
+          ref={editorRef}
+          contentEditable
+          role="textbox"
+          aria-label={ariaLabel}
+          onClick={(event) => {
+            if (event.target instanceof HTMLImageElement) {
+              event.preventDefault();
+              selectImage(event.target);
+            } else {
+              setSelectedImage(null);
+              setImageBounds(null);
+            }
+          }}
+          onInput={(event) => {
+            onChange(event.currentTarget.innerHTML);
             saveSelection();
-          }
-        }}
-        onInput={(event) => {
-          onChange(event.currentTarget.innerHTML);
-          saveSelection();
-        }}
-        onKeyUp={saveSelection}
-        onMouseUp={saveSelection}
-        onBlur={saveSelection}
-        className="min-h-80 px-5 py-4 leading-8 text-[#4a382b] outline-none [&_a]:font-semibold [&_a]:text-[#5c4a3d] [&_h2]:font-serif [&_h2]:text-3xl [&_h3]:font-serif [&_h3]:text-2xl [&_iframe]:my-5 [&_iframe]:aspect-video [&_iframe]:h-auto [&_iframe]:w-full [&_iframe]:rounded-xl [&_img]:my-5 [&_img]:max-h-96 [&_img]:rounded-xl [&_img]:object-cover [&_li]:ml-6 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-bold [&_ul]:list-disc"
-        suppressContentEditableWarning
-      />
+          }}
+          onKeyUp={() => {
+            saveSelection();
+            const selection = window.getSelection();
+            const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+            const node = range?.startContainer.childNodes[range.startOffset];
+            if (range && !range.collapsed && node instanceof HTMLImageElement) {
+              selectImage(node);
+            }
+          }}
+          onMouseUp={saveSelection}
+          onBlur={saveSelection}
+          className="min-h-80 px-5 py-4 leading-8 text-[#4a382b] outline-none [&_a]:font-semibold [&_a]:text-[#5c4a3d] [&_h2]:font-serif [&_h2]:text-3xl [&_h3]:font-serif [&_h3]:text-2xl [&_iframe]:my-5 [&_iframe]:aspect-video [&_iframe]:h-auto [&_iframe]:w-full [&_iframe]:rounded-xl [&_img]:my-5 [&_img]:max-h-96 [&_img]:rounded-xl [&_img]:object-cover [&_li]:ml-6 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-bold [&_ul]:list-disc"
+          suppressContentEditableWarning
+        />
+        {selectedImage && imageBounds ? (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute rounded-sm outline-2 outline-offset-2 outline-[#8b6f56]"
+              style={imageBounds}
+            />
+            <div
+              role="group"
+              aria-label="Selected image"
+              className="absolute left-3 right-3 z-10 rounded-lg border border-[#5c4a3d]/20 bg-[#fdfaf6] p-3 text-sm text-[#4a382b] shadow-md sm:left-5 sm:right-auto sm:w-96 sm:max-w-[calc(100%-2.5rem)]"
+              style={{ top: imageBounds.top + imageBounds.height + 8 }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Escape") {
+                  event.preventDefault();
+                  finishImageEdit();
+                }
+              }}
+            >
+              <p className="mb-2 font-semibold">Selected image</p>
+              <label className="block">
+                <span className="mb-1 block">Alt text</span>
+                <input
+                  value={decorative ? "" : imageAlt}
+                  disabled={decorative}
+                  onChange={(event) => {
+                    setImageAlt(event.target.value);
+                    updateImageAlt(event.target.value);
+                  }}
+                  className="w-full rounded-md border border-[#5c4a3d]/20 bg-[#fdfaf6] px-3 py-2 outline-none focus:ring-2 focus:ring-[#5c4a3d]/20 disabled:opacity-50"
+                />
+              </label>
+              <div className="mt-3 flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={finishImageEdit}
+                  className="rounded-md bg-[#5c4a3d] px-4 py-2 font-semibold text-[#fdfaf6] hover:bg-[#47382f]"
+                >
+                  Save
+                </button>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={decorative}
+                    onChange={(event) => {
+                      setDecorative(event.target.checked);
+                      updateImageAlt(event.target.checked ? "" : imageAlt);
+                    }}
+                  />
+                  Decorative image
+                </label>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

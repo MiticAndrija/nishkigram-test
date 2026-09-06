@@ -14,6 +14,7 @@ export type BlogPost = {
   category?: string;
   tags?: string[];
   coverImage: string;
+  coverImageAlt?: string;
   coverImagePosition?: string;
   contentHtml: string;
   published: boolean;
@@ -34,6 +35,7 @@ export type BlogPostInput = {
   category?: string;
   tags?: string[];
   coverImage: string;
+  coverImageAlt?: string;
   coverImagePosition?: string;
   contentHtml: string;
   published: boolean;
@@ -118,6 +120,7 @@ export async function createPost(input: BlogPostInput) {
     category: normalizeCategory(input.category, categories),
     tags: normalizeTags(input.tags),
     coverImage: input.coverImage.trim() || defaultCoverImage,
+    coverImageAlt: input.coverImageAlt,
     coverImagePosition: input.coverImagePosition || "center bottom",
     contentHtml: sanitizeHtml(input.contentHtml),
     published: input.published,
@@ -152,6 +155,7 @@ export async function updatePost(id: string, input: BlogPostInput) {
     category: normalizeCategory(input.category, categoryOptions),
     tags: normalizeTags(input.tags),
     coverImage: input.coverImage.trim() || defaultCoverImage,
+    coverImageAlt: input.coverImageAlt ?? existing.coverImageAlt,
     coverImagePosition: input.coverImagePosition || "center bottom",
     contentHtml: sanitizeHtml(input.contentHtml),
     published: input.published,

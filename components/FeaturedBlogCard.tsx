@@ -30,7 +30,7 @@ export default function FeaturedBlogCard({ post }: { post: BlogPost }) {
         <div className="relative min-h-[320px] overflow-hidden bg-[#e8e0d5] sm:min-h-[440px] md:min-h-[570px]">
           <Image
             src={coverImage}
-            alt={post.title}
+            alt={post.coverImageAlt ?? post.title}
             fill
             sizes="(min-width: 768px) 65vw, 100vw"
             className="object-cover transition-transform duration-700 group-hover:scale-[1.025]"

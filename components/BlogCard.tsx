@@ -27,7 +27,7 @@ export default function BlogCard({ post }: { post: BlogPost }) {
       <div className="relative h-52 bg-[#e8e0d5] sm:h-64">
         <Image
           src={coverImage}
-          alt={post.title}
+          alt={post.coverImageAlt ?? post.title}
           fill
           sizes="(min-width: 768px) 33vw, 100vw"
           className="object-cover object-bottom transition-transform duration-500 group-hover:scale-105"

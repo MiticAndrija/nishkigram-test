@@ -30,6 +30,7 @@ const emptyForm: BlogPostInput = {
   tags: [],
   author: "Niškigram",
   coverImage: "/images/nis-hero.png",
+  coverImageAlt: "",
   coverImagePosition: "center bottom",
   contentHtml: "<p></p>",
   published: true,
@@ -53,6 +54,7 @@ function postToForm(post?: BlogPost | null): BlogPostInput {
         tags: post.tags ?? [],
         author: post.author,
         coverImage: post.coverImage,
+        coverImageAlt: post.coverImageAlt ?? post.title,
         coverImagePosition: post.coverImagePosition ?? "center bottom",
         contentHtml: post.contentHtml,
         published: post.published,
@@ -308,6 +310,22 @@ export default function BlogForm({
           />
         </label>
 
+        <label>
+          <span className="mb-2 block font-semibold text-[#4a382b]">
+            Image alt text
+          </span>
+          <input
+            value={form.coverImageAlt ?? ""}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, coverImageAlt: event.target.value }))
+            }
+            className="w-full rounded-lg border border-[#5c4a3d]/20 bg-[#fdfaf6] px-4 py-3 text-[#4a382b] outline-none focus:ring-4 focus:ring-[#5c4a3d]/15"
+          />
+          <span className="mt-2 block text-sm text-[#5c4a3d]/70">
+            Describe the image. Leave empty if it is decorative.
+          </span>
+        </label>
+
         <div className="grid gap-3 rounded-lg border border-[#5c4a3d]/15 bg-[#fdfaf6] p-4">
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -354,7 +372,7 @@ export default function BlogForm({
           {form.coverImage ? (
             <CoverImageFocusPicker
               imageUrl={form.coverImage}
-              alt="Cover preview"
+              alt={form.coverImageAlt ?? form.title}
               value={form.coverImagePosition}
               heightClass="h-56"
               onChange={(coverImagePosition) =>
@@ -444,7 +462,7 @@ export default function BlogForm({
           <div className="mt-5 overflow-hidden rounded-xl bg-[#e8e0d5]">
             <CoverImageFocusPicker
               imageUrl={form.coverImage}
-              alt={form.title || "Preview cover"}
+              alt={form.coverImageAlt ?? form.title}
               value={form.coverImagePosition}
               heightClass="h-64"
               onChange={(coverImagePosition) =>

@@ -13,6 +13,7 @@ export type Recommendation = {
   description: string;
   category?: string;
   coverImage: string;
+  coverImageAlt?: string;
   coverImagePosition?: string;
   contentHtml: string;
   published: boolean;
@@ -31,6 +32,7 @@ export type RecommendationInput = {
   description: string;
   category?: string;
   coverImage: string;
+  coverImageAlt?: string;
   coverImagePosition?: string;
   contentHtml: string;
   published: boolean;
@@ -119,6 +121,7 @@ export async function createRecommendation(input: RecommendationInput) {
     description: input.description.trim(),
     category: normalizeCategory(input.category, categories),
     coverImage: input.coverImage.trim() || defaultCoverImage,
+    coverImageAlt: input.coverImageAlt,
     coverImagePosition: input.coverImagePosition || "center bottom",
     contentHtml: sanitizeHtml(input.contentHtml),
     published: input.published,
@@ -165,6 +168,7 @@ export async function updateRecommendation(
     description: input.description.trim(),
     category: normalizeCategory(input.category, categoryOptions),
     coverImage: input.coverImage.trim() || defaultCoverImage,
+    coverImageAlt: input.coverImageAlt ?? existing.coverImageAlt,
     coverImagePosition: input.coverImagePosition || "center bottom",
     contentHtml: sanitizeHtml(input.contentHtml),
     published: input.published,

@@ -32,8 +32,13 @@ function cleanUrl(value: string) {
 }
 
 function getAttribute(attributes: string, name: string) {
-  const pattern = new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, "i");
-  return attributes.match(pattern)?.[1] ?? "";
+  const pattern = /([^\s=/'"<>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  for (const match of attributes.matchAll(pattern)) {
+    if (match[1].toLowerCase() === name) {
+      return match[2] ?? match[3] ?? match[4] ?? "";
+    }
+  }
+  return "";
 }
 
 function cleanYoutubeEmbedUrl(value: string) {
@@ -60,7 +65,7 @@ export function sanitizeHtml(input: string) {
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\/?([a-z0-9]+)([^>]*)>/gi, (match, rawTag, attributes) => {
+    .replace(/<\/?([a-z0-9]+)((?:"[^"]*"|'[^']*'|[^>])*)>/gi, (match, rawTag, attributes) => {
       const tag = rawTag.toLowerCase();
       const isClosing = match.startsWith("</");
 
@@ -81,7 +86,10 @@ export function sanitizeHtml(input: string) {
 
       if (tag === "img") {
         const src = cleanUrl(getAttribute(attributes, "src"));
-        const alt = getAttribute(attributes, "alt").replace(/"/g, "&quot;");
+        const alt = getAttribute(attributes, "alt")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
         return src ? `<img src="${src}" alt="${alt}" />` : "";
       }
 
@@ -97,7 +105,5 @@ export function sanitizeHtml(input: string) {
       }
 
       return tag === "br" ? "<br />" : `<${tag}>`;
-    })
-    .replace(/\s(on[a-z]+|style|class|id)=["'][^"']*["']/gi, "")
-    .replace(/javascript:/gi, "");
+    });
 }

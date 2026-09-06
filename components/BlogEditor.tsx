@@ -33,6 +33,7 @@ export default function BlogEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
+  const selectedImageRef = useRef<HTMLImageElement | null>(null);
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "uploading" | "success" | "error"
   >("idle");
@@ -41,6 +42,7 @@ export default function BlogEditor({
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
       editorRef.current.innerHTML = value;
+      selectedImageRef.current = null;
     }
   }, [value]);
 
@@ -56,6 +58,9 @@ export default function BlogEditor({
 
     if (editor.contains(range.commonAncestorContainer)) {
       savedRangeRef.current = range.cloneRange();
+      const node = range.startContainer.childNodes[range.startOffset];
+      selectedImageRef.current =
+        !range.collapsed && node instanceof HTMLImageElement ? node : null;
     }
   };
 
@@ -111,11 +116,35 @@ export default function BlogEditor({
     }
   };
 
+  const insertImage = (src: string, alt: string) => {
+    const image = document.createElement("img");
+    image.setAttribute("src", src);
+    image.setAttribute("alt", alt);
+    insertHtml(image.outerHTML);
+  };
+
+  const editImageAlt = () => {
+    const image = selectedImageRef.current;
+    if (!image || !editorRef.current?.contains(image)) {
+      window.alert("Select an image in the editor first, then choose Image alt text.");
+      return;
+    }
+    const alt = window.prompt(
+      "Image alt text (leave empty for a decorative image)",
+      image.getAttribute("alt") ?? "",
+    );
+    if (alt !== null) {
+      image.setAttribute("alt", alt);
+      syncEditorValue();
+    }
+  };
+
   const addImage = () => {
     const src = window.prompt("Unesite URL slike");
 
     if (src) {
-      insertHtml(`<img src="${src.replace(/"/g, "&quot;")}" alt="" />`);
+      const alt = window.prompt("Image alt text (leave empty for a decorative image)", "");
+      if (alt !== null) insertImage(src, alt);
     }
   };
 
@@ -149,6 +178,12 @@ export default function BlogEditor({
       return;
     }
 
+    const alt = window.prompt("Image alt text (leave empty for a decorative image)", "");
+    if (alt === null) {
+      event.target.value = "";
+      return;
+    }
+
     setUploadStatus("uploading");
     setUploadMessage("");
 
@@ -157,9 +192,7 @@ export default function BlogEditor({
         setUploadMessage(`Uploadujem sliku... ${Math.round(percentage)}%`),
       );
 
-      insertHtml(
-        `<img src="${uploadedImage.url.replace(/"/g, "&quot;")}" alt="" />`,
-      );
+      insertImage(uploadedImage.url, alt);
       setUploadStatus("success");
       setUploadMessage("Slika je ubačena u tekst.");
     } catch (error) {
@@ -205,6 +238,15 @@ export default function BlogEditor({
         </button>
         <button
           type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={editImageAlt}
+          title="Select an image in the editor to edit its alt text"
+          className="h-9 rounded-md border border-[#5c4a3d]/15 px-3 text-sm font-semibold text-[#5c4a3d] transition-colors hover:bg-[#5c4a3d]/8"
+        >
+          Image alt text
+        </button>
+        <button
+          type="button"
           onMouseDown={saveSelection}
           onClick={addYoutube}
           className="h-9 rounded-md border border-[#5c4a3d]/15 px-3 text-sm font-semibold text-[#5c4a3d] transition-colors hover:bg-[#5c4a3d]/8"
@@ -243,6 +285,16 @@ export default function BlogEditor({
         contentEditable
         role="textbox"
         aria-label={ariaLabel}
+        onClick={(event) => {
+          if (event.target instanceof HTMLImageElement) {
+            const range = document.createRange();
+            range.selectNode(event.target);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            saveSelection();
+          }
+        }}
         onInput={(event) => {
           onChange(event.currentTarget.innerHTML);
           saveSelection();

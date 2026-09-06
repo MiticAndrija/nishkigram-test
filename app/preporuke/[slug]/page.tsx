@@ -72,7 +72,7 @@ export default async function RecommendationPage({
             <div className="relative mx-auto h-72 max-w-6xl overflow-hidden rounded-3xl bg-[#e8e0d5] shadow-2xl sm:h-[420px] sm:rounded-[2rem]">
               <Image
                 src={coverImage}
-                alt={recommendation.title}
+                alt={recommendation.coverImageAlt ?? recommendation.title}
                 fill
                 sizes="100vw"
                 className="object-cover object-bottom"
